@@ -1,10 +1,13 @@
 package com.easybytes.springsecuritybasic.config;
 
+import com.easybytes.springsecuritybasic.filter.AuthoritiesLoggingAfterFilter;
 import com.easybytes.springsecuritybasic.filter.CsrfCookieFilter;
+import com.easybytes.springsecuritybasic.filter.RequestValidationBeforeFilter;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.userdetails.User;
@@ -29,6 +32,7 @@ import java.util.Collections;
 import static org.springframework.security.config.Customizer.withDefaults;
 
 @Configuration
+@EnableWebSecurity(debug = true)
 public class ProjectSecurityConfig {
 
 
@@ -57,6 +61,8 @@ public class ProjectSecurityConfig {
                                        .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
                )
                .addFilterAfter(new CsrfCookieFilter(), BasicAuthenticationFilter.class)
+               .addFilterBefore(new RequestValidationBeforeFilter(), BasicAuthenticationFilter.class)
+               .addFilterAfter(new AuthoritiesLoggingAfterFilter(), BasicAuthenticationFilter.class)
                .authorizeHttpRequests(requests ->
                 requests.requestMatchers("/myAccount","/myBalance","/myLoans","/myCards","/user").authenticated()
                         .requestMatchers("/contact","/notices","/register").permitAll()
