@@ -1,6 +1,8 @@
 package com.easybytes.springsecuritybasic.config;
 
+import com.easybytes.springsecuritybasic.model.Authority;
 import com.easybytes.springsecuritybasic.model.Customer;
+import com.easybytes.springsecuritybasic.model.authenum.Auth;
 import com.easybytes.springsecuritybasic.repository.CustomerRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationProvider;
@@ -15,6 +17,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 @RequiredArgsConstructor
 @Component
@@ -27,19 +30,24 @@ public class EasyBankUsernamePwdAuthenticationProvider implements Authentication
     public Authentication authenticate(Authentication authentication) throws AuthenticationException {
         String username = authentication.getName();
         String pwd = authentication.getCredentials().toString();
-
-        List<Customer> customers = customerRepository.findByEmail(username);
-        if (!customers.isEmpty()){
-            if (passwordEncoder.matches(pwd, customers.get(0).getPwd())){
-                List<GrantedAuthority> authorities = new ArrayList<>();
-                authorities.add(new SimpleGrantedAuthority(customers.get(0).getRole()));
-                return new UsernamePasswordAuthenticationToken(username, pwd, authorities);
-            }else {
-                throw new BadCredentialsException("잘못된 비밀번호입니다!");
+        List<Customer> customer = customerRepository.findByEmail(username);
+        if (customer.size() > 0) {
+            if (passwordEncoder.matches(pwd, customer.get(0).getPwd())) {
+                return new UsernamePasswordAuthenticationToken(username, pwd, getGrantedAuthorities(customer.get(0).getAuthorities()));
+            } else {
+                throw new BadCredentialsException("Invalid password!");
             }
         }else {
-            throw new BadCredentialsException("등록되지않은 회원입니다!");
+            throw new BadCredentialsException("No user registered with this details!");
         }
+    }
+
+    private List<GrantedAuthority> getGrantedAuthorities(Set<Authority> authorities) {
+        List<GrantedAuthority> grantedAuthorities = new ArrayList<>();
+        for (Authority authority : authorities) {
+            grantedAuthorities.add(new SimpleGrantedAuthority(authority.getName()));
+        }
+        return grantedAuthorities;
     }
 
     @Override
