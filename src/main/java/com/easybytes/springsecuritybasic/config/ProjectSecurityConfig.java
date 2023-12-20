@@ -1,11 +1,10 @@
 package com.easybytes.springsecuritybasic.config;
 
-import com.easybytes.springsecuritybasic.filter.AuthoritiesLoggingAfterFilter;
-import com.easybytes.springsecuritybasic.filter.CsrfCookieFilter;
-import com.easybytes.springsecuritybasic.filter.RequestValidationBeforeFilter;
+import com.easybytes.springsecuritybasic.filter.*;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -27,12 +26,12 @@ import org.springframework.web.cors.CorsConfigurationSource;
 
 import javax.sql.DataSource;
 
+import java.util.Arrays;
 import java.util.Collections;
 
 import static org.springframework.security.config.Customizer.withDefaults;
 
 @Configuration
-@EnableWebSecurity(debug = true)
 public class ProjectSecurityConfig {
 
 
@@ -40,36 +39,39 @@ public class ProjectSecurityConfig {
 
     @Bean
     SecurityFilterChain defaultSecurityFilterChain(HttpSecurity http) throws Exception {
-
         CsrfTokenRequestAttributeHandler requestHandler = new CsrfTokenRequestAttributeHandler();
         requestHandler.setCsrfRequestAttributeName("_csrf");
-
-       return http
-               .securityContext(context -> context.requireExplicitSave(false))
-               .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.ALWAYS))
-               .cors(cors -> cors.configurationSource(request -> {
-                   CorsConfiguration config = new CorsConfiguration();
-                   config.setAllowedOrigins(Collections.singletonList("http://localhost:4200"));
-                   config.setAllowedMethods(Collections.singletonList("*"));
-                   config.setAllowCredentials(true);
-                   config.setAllowedHeaders(Collections.singletonList("*"));
-                   config.setMaxAge(3600L);
-                   return config;
-               }))
-               .csrf(csrf ->
-                               csrf.csrfTokenRequestHandler(requestHandler).ignoringRequestMatchers("/contact","register")
-                                       .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
-               )
-               .addFilterAfter(new CsrfCookieFilter(), BasicAuthenticationFilter.class)
-               .addFilterBefore(new RequestValidationBeforeFilter(), BasicAuthenticationFilter.class)
-               .addFilterAfter(new AuthoritiesLoggingAfterFilter(), BasicAuthenticationFilter.class)
-               .authorizeHttpRequests(requests ->
-                requests.requestMatchers("/myAccount","/myBalance","/myLoans","/myCards","/user").authenticated()
-                        .requestMatchers("/contact","/notices","/register").permitAll()
-        )
-               .formLogin(withDefaults())
-               .httpBasic(withDefaults())
-               .build();
+        http.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .cors(corsCustomizer -> corsCustomizer.configurationSource(new CorsConfigurationSource() {
+                    @Override
+                    public CorsConfiguration getCorsConfiguration(HttpServletRequest request) {
+                        CorsConfiguration config = new CorsConfiguration();
+                        config.setAllowedOrigins(Collections.singletonList("http://localhost:4200"));
+                        config.setAllowedMethods(Collections.singletonList("*"));
+                        config.setAllowCredentials(true);
+                        config.setAllowedHeaders(Collections.singletonList("*"));
+                        config.setExposedHeaders(Arrays.asList("Authorization"));
+                        config.setMaxAge(3600L);
+                        return config;
+                    }
+                })).csrf((csrf) -> csrf.csrfTokenRequestHandler(requestHandler).ignoringRequestMatchers("/contact","/register")
+                        .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse()))
+                .addFilterAfter(new CsrfCookieFilter(), BasicAuthenticationFilter.class)
+                .addFilterBefore(new RequestValidationBeforeFilter(), BasicAuthenticationFilter.class)
+                .addFilterAt(new AuthoritiesLoggingAfterFilter(),BasicAuthenticationFilter.class)
+                .addFilterAfter(new AuthoritiesLoggingAfterFilter(), BasicAuthenticationFilter.class)
+                .addFilterAfter(new JwtTokenGeneratorFilter(), BasicAuthenticationFilter.class)
+                .addFilterBefore(new JwtTokenValidateFilter(), BasicAuthenticationFilter.class)
+                .authorizeHttpRequests((requests)->requests
+                        .requestMatchers("/myAccount").hasRole("USER")
+                        .requestMatchers("/myBalance").hasAnyRole("USER","ADMIN")
+                        .requestMatchers("/myLoans").hasRole("USER")
+                        .requestMatchers("/myCards").hasRole("USER")
+                        .requestMatchers("/user").authenticated()
+                        .requestMatchers("/notices","/contact","/register").permitAll())
+                .formLogin(Customizer.withDefaults())
+                .httpBasic(Customizer.withDefaults());
+        return http.build();
     }
 
     @Bean
@@ -84,7 +86,6 @@ public class ProjectSecurityConfig {
 //                .password("1234")
 //                .authorities("admin")
 //                .build();
-//
 //
 //        UserDetails user = User.withUsername("user")
 //                .password("1234")
